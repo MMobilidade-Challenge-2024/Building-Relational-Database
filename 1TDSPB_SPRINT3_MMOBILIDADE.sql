@@ -1,0 +1,231 @@
+-- Sistema de Gerenciamento de Metrô
+-- RMs: 559469, 560445, 560276
+-- Nomes: João Vinicius Alves, Juan Pablo Rebelo Coelho e Matheus Barbosa Mariotto
+
+-- CRIAÇÃO DAS TABELAS COM CHAVES E RESTRIÇÕES
+
+-- Tabela LINHA
+CREATE TABLE TB_LINHA (
+    id_linha         INTEGER PRIMARY KEY,
+    nm_metro         VARCHAR2(30) NOT NULL,
+    
+    CONSTRAINT UQ_LINHA_NM_METRO UNIQUE (nm_metro)
+);
+
+-- Tabela METRO
+CREATE TABLE TB_METRO (
+    id_metro         INTEGER PRIMARY KEY,
+    nm_metro         VARCHAR2(10) NOT NULL,
+    hr_partida       DATE NOT NULL,
+    hr_chegada       DATE NOT NULL,
+    capacidade_max   INTEGER NOT NULL,
+    id_linha         INTEGER NOT NULL,
+    
+    CONSTRAINT FK_METRO_LINHA FOREIGN KEY (id_linha) REFERENCES TB_LINHA (id_linha),
+    CONSTRAINT CK_METRO_CAPACIDADE CHECK (capacidade_max > 0)
+);
+
+-- Tabela ESTACAO
+CREATE TABLE TB_ESTACAO (
+    id_estacao       INTEGER PRIMARY KEY,
+    nm_estacao       VARCHAR2(40) NOT NULL,
+    local            VARCHAR2(40) NOT NULL,
+    cap_max          INTEGER NOT NULL,
+    id_linha         INTEGER NOT NULL,
+    
+    CONSTRAINT FK_ESTACAO_LINHA FOREIGN KEY (id_linha) REFERENCES TB_LINHA (id_linha),
+    CONSTRAINT CK_ESTACAO_CAP_MAX CHECK (cap_max > 0)
+);
+
+-- Tabela FALHA
+CREATE TABLE TB_FALHA (
+    id_falha         INTEGER PRIMARY KEY,
+    desc_falha       CLOB NOT NULL,
+    status           VARCHAR2(15) NOT NULL,
+    tipo             VARCHAR2(10) NOT NULL,
+    dt_hr            DATE DEFAULT SYSDATE NOT NULL,
+    prioridade       VARCHAR2(10) NOT NULL,
+    id_metro         INTEGER,
+    id_estacao       INTEGER,
+    
+    CONSTRAINT FK_FALHA_METRO FOREIGN KEY (id_metro) REFERENCES TB_METRO (id_metro),
+    CONSTRAINT FK_FALHA_ESTACAO FOREIGN KEY (id_estacao) REFERENCES TB_ESTACAO (id_estacao),
+    CONSTRAINT CK_FALHA_PRIORIDADE CHECK (prioridade IN ('BAIXA', 'MEDIA', 'ALTA', 'CRITICA')),
+    CONSTRAINT CK_FALHA_STATUS CHECK (status IN ('PENDENTE', 'EM_ANALISE', 'RESOLVIDA', 'CANCELADA'))
+);
+
+-- Tabela MANUTENCAO
+CREATE TABLE TB_MANUTENCAO (
+    id_manutencao    INTEGER PRIMARY KEY,
+    desc             CLOB NOT NULL,
+    dt_inicio        DATE DEFAULT SYSDATE NOT NULL,
+    dt_fim           DATE,
+    id_falha         INTEGER NOT NULL,
+    
+    CONSTRAINT FK_MANUTENCAO_FALHA FOREIGN KEY (id_falha) REFERENCES TB_FALHA (id_falha),
+    CONSTRAINT CK_MANUTENCAO_DATA CHECK (dt_fim IS NULL OR dt_fim > dt_inicio)
+);
+
+-- Tabela USUARIO
+CREATE TABLE TB_USUARIO (
+    id_usuario       INTEGER PRIMARY KEY,
+    cargo            VARCHAR2(15) NOT NULL,
+    nv_acesso        VARCHAR2(15) NOT NULL,
+    nm_usuario       VARCHAR2(50) NOT NULL,
+    login            VARCHAR2(50) NOT NULL,
+    senha            VARCHAR2(20) NOT NULL,
+    
+    CONSTRAINT UQ_USUARIO_LOGIN UNIQUE (login),
+    CONSTRAINT CK_USUARIO_NV_ACESSO CHECK (nv_acesso IN ('ADMIN', 'TECNICO', 'OPERADOR', 'GESTOR'))
+);
+
+-- Tabela RELATORIO
+CREATE TABLE TB_RELATORIO (
+    id_relatorio     INTEGER PRIMARY KEY,
+    desc_relatorio   CLOB NOT NULL,
+    dt_hr            DATE DEFAULT SYSDATE NOT NULL,
+    id_falha         INTEGER,
+    id_usuario       INTEGER NOT NULL,
+    
+    CONSTRAINT FK_RELATORIO_FALHA FOREIGN KEY (id_falha) REFERENCES TB_FALHA (id_falha),
+    CONSTRAINT FK_RELATORIO_USUARIO FOREIGN KEY (id_usuario) REFERENCES TB_USUARIO (id_usuario)
+);
+
+-- TABELAS AUXILIARES PARA RELACIONAMENTOS N:N
+
+-- Relação entre Relatório e Falha (caso um relatório possa conter várias falhas)
+CREATE TABLE TB_RELATORIO_FALHA (
+    id_relatorio     INTEGER,
+    id_falha         INTEGER,
+    
+    CONSTRAINT PK_RELATORIO_FALHA PRIMARY KEY (id_relatorio, id_falha),
+    CONSTRAINT FK_REL_FALHA_RELATORIO FOREIGN KEY (id_relatorio) REFERENCES TB_RELATORIO (id_relatorio),
+    CONSTRAINT FK_REL_FALHA_FALHA FOREIGN KEY (id_falha) REFERENCES TB_FALHA (id_falha)
+);
+
+-- SEQUÊNCIAS PARA GERAÇÃO AUTOMÁTICA DE IDs
+
+CREATE SEQUENCE SEQ_LINHA
+    START WITH 1
+    INCREMENT BY 1
+    NOCACHE
+    NOCYCLE;
+
+CREATE SEQUENCE SEQ_METRO
+    START WITH 1
+    INCREMENT BY 1
+    NOCACHE
+    NOCYCLE;
+
+CREATE SEQUENCE SEQ_ESTACAO
+    START WITH 1
+    INCREMENT BY 1
+    NOCACHE
+    NOCYCLE;
+
+CREATE SEQUENCE SEQ_FALHA
+    START WITH 1
+    INCREMENT BY 1
+    NOCACHE
+    NOCYCLE;
+
+CREATE SEQUENCE SEQ_MANUTENCAO
+    START WITH 1
+    INCREMENT BY 1
+    NOCACHE
+    NOCYCLE;
+
+CREATE SEQUENCE SEQ_USUARIO
+    START WITH 1
+    INCREMENT BY 1
+    NOCACHE
+    NOCYCLE;
+
+CREATE SEQUENCE SEQ_RELATORIO
+    START WITH 1
+    INCREMENT BY 1
+    NOCACHE
+    NOCYCLE;
+
+-- TRIGGERS PARA AUTOMATIZAR A GERAÇÃO DE IDs
+
+CREATE OR REPLACE TRIGGER TRG_LINHA_BI
+BEFORE INSERT ON TB_LINHA
+FOR EACH ROW
+BEGIN
+    IF :NEW.id_linha IS NULL THEN
+        SELECT SEQ_LINHA.NEXTVAL INTO :NEW.id_linha FROM DUAL;
+    END IF;
+END;
+/
+
+CREATE OR REPLACE TRIGGER TRG_METRO_BI
+BEFORE INSERT ON TB_METRO
+FOR EACH ROW
+BEGIN
+    IF :NEW.id_metro IS NULL THEN
+        SELECT SEQ_METRO.NEXTVAL INTO :NEW.id_metro FROM DUAL;
+    END IF;
+END;
+/
+
+CREATE OR REPLACE TRIGGER TRG_ESTACAO_BI
+BEFORE INSERT ON TB_ESTACAO
+FOR EACH ROW
+BEGIN
+    IF :NEW.id_estacao IS NULL THEN
+        SELECT SEQ_ESTACAO.NEXTVAL INTO :NEW.id_estacao FROM DUAL;
+    END IF;
+END;
+/
+
+CREATE OR REPLACE TRIGGER TRG_FALHA_BI
+BEFORE INSERT ON TB_FALHA
+FOR EACH ROW
+BEGIN
+    IF :NEW.id_falha IS NULL THEN
+        SELECT SEQ_FALHA.NEXTVAL INTO :NEW.id_falha FROM DUAL;
+    END IF;
+END;
+/
+
+CREATE OR REPLACE TRIGGER TRG_MANUTENCAO_BI
+BEFORE INSERT ON TB_MANUTENCAO
+FOR EACH ROW
+BEGIN
+    IF :NEW.id_manutencao IS NULL THEN
+        SELECT SEQ_MANUTENCAO.NEXTVAL INTO :NEW.id_manutencao FROM DUAL;
+    END IF;
+END;
+/
+
+CREATE OR REPLACE TRIGGER TRG_USUARIO_BI
+BEFORE INSERT ON TB_USUARIO
+FOR EACH ROW
+BEGIN
+    IF :NEW.id_usuario IS NULL THEN
+        SELECT SEQ_USUARIO.NEXTVAL INTO :NEW.id_usuario FROM DUAL;
+    END IF;
+END;
+/
+
+CREATE OR REPLACE TRIGGER TRG_RELATORIO_BI
+BEFORE INSERT ON TB_RELATORIO
+FOR EACH ROW
+BEGIN
+    IF :NEW.id_relatorio IS NULL THEN
+        SELECT SEQ_RELATORIO.NEXTVAL INTO :NEW.id_relatorio FROM DUAL;
+    END IF;
+END;
+/
+
+-- COMENTÁRIOS NAS TABELAS E COLUNAS
+
+COMMENT ON TABLE TB_LINHA IS 'Tabela que armazena as linhas de metrô do sistema';
+COMMENT ON TABLE TB_METRO IS 'Tabela que armazena as informações dos veículos metrô';
+COMMENT ON TABLE TB_ESTACAO IS 'Tabela que armazena as estações de cada linha de metrô';
+COMMENT ON TABLE TB_FALHA IS 'Tabela que registra as falhas no sistema de metrô';
+COMMENT ON TABLE TB_MANUTENCAO IS 'Tabela que registra as manutenções realizadas para corrigir falhas';
+COMMENT ON TABLE TB_USUARIO IS 'Tabela que armazena os usuários do sistema';
+COMMENT ON TABLE TB_RELATORIO IS 'Tabela que armazena os relatórios gerados no sistema';
+COMMENT ON TABLE TB_RELATORIO_FALHA IS 'Tabela associativa entre relatórios e falhas';
